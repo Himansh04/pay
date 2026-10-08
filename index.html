@@ -65,6 +65,18 @@
   .lbl { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin-top: 10px; }
   .msg { font-size: 14px; line-height: 1.45; }
   .msg.warn { color: var(--warn); }
+  .bill .bhead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 16px; }
+  .bill .bhead span { font-size: 13px; color: var(--muted); }
+  .bill .bfor { font-size: 14px; color: var(--muted); margin-top: 2px; }
+  .bill table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+  .bill td { padding: 8px 0; border-top: 1px solid var(--line); vertical-align: top; }
+  .bill td.r { text-align: right; white-space: nowrap; padding-left: 10px; font-weight: 700; }
+  .bill .it { font-weight: 700; overflow-wrap: anywhere; }
+  .bill .sub { font-size: 12.5px; color: var(--muted); }
+  .bill .sum { display: flex; justify-content: space-between; font-size: 14px; padding: 4px 0; }
+  .bill .sum.tot { font-size: 17px; font-weight: 900; border-top: 2px solid var(--ink); margin-top: 6px; padding-top: 8px; }
+  .bill .sum.due { font-size: 17px; font-weight: 900; color: var(--warn); }
+  .bill .sum.got b { color: var(--ok); }
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--bg);
            padding: 10px 16px; border-radius: 10px; font-size: 14px; font-weight: 700; opacity: 0; transition: opacity .2s; pointer-events: none; }
   .toast.on { opacity: 1; }
@@ -87,6 +99,13 @@
       <div id="intro" class="msg"></div>
       <div id="actions"></div>
       <ol class="steps" id="steps"></ol>
+    </div>
+
+    <div class="card bill" id="billCard" hidden>
+      <div class="bhead"><b id="billNo">Bill</b><span id="billDate"></span></div>
+      <div class="bfor" id="billFor"></div>
+      <table><tbody id="billRows"></tbody></table>
+      <div id="billSums"></div>
     </div>
 
     <div class="card" id="idCard">
@@ -2671,6 +2690,50 @@ window.QRCore = load("qrcode/lib/core/qrcode.js");
     (pn ? '&pn=' + encodeURIComponent(pn) : '') +
     (am ? '&am=' + am.toFixed(2) : '') + '&cu=INR' +
     (tn ? '&tn=' + encodeURIComponent(tn) : '');
+
+  /* The bill itself (b=: base64url of its JSON, from bill.js pageBill), shown
+     so the customer sees what they pay for. A bad one is just left out. */
+  function readBill(s) {
+    try {
+      var bin = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4));
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      var b = JSON.parse(new TextDecoder('utf-8').decode(bytes));
+      return b && typeof b === 'object' ? b : null;
+    } catch (e) { return null; }
+  }
+  var bill = q.get('b') ? readBill(q.get('b')) : null;
+  if (bill) {
+    var num = function (v) { return Number(v) || 0; };
+    var el = function (tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+    $('billNo').textContent = tn || 'Bill';
+    if (bill.d && /^\d{4}-\d{2}-\d{2}$/.test(bill.d)) {
+      var dt = new Date(bill.d + 'T12:00:00');
+      $('billDate').textContent = dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+    $('billFor').textContent = bill.c ? 'For ' + String(bill.c).slice(0, 80) : '';
+    var rows = $('billRows');
+    (Array.isArray(bill.i) ? bill.i : []).slice(0, 200).forEach(function (it) {
+      if (!Array.isArray(it)) return;
+      var tr = el('tr'), left = el('td'), right = el('td', 'r', inr(num(it[4])));
+      left.appendChild(el('div', 'it', String(it[0] || '').slice(0, 120)));
+      left.appendChild(el('div', 'sub', (it[1] ? String(it[1]).slice(0, 60) + ' · ' : '') +
+        num(it[2]).toLocaleString('en-IN') + ' × ' + inr(num(it[3]))));
+      tr.appendChild(left); tr.appendChild(right); rows.appendChild(tr);
+    });
+    if (bill.n) { var tr2 = el('tr'), td = el('td', 'sub', bill.n + ' items'); td.colSpan = 2; tr2.appendChild(td); rows.appendChild(tr2); }
+    var sums = $('billSums');
+    var line = function (cls, k, v) { var d = el('div', 'sum ' + cls); d.appendChild(el('span', '', k)); d.appendChild(el('b', '', v)); sums.appendChild(d); };
+    line('', 'Subtotal', inr(num(bill.s)));
+    if (Array.isArray(bill.g)) line('', 'GST (' + num(bill.g[0]) + '%)', inr(num(bill.g[1])));
+    if (num(bill.r)) line('', 'Round off', (num(bill.r) > 0 ? '+' : '−') + inr(Math.abs(num(bill.r))));
+    line('tot', 'Total', inr(num(bill.t)));
+    if (num(bill.p)) {
+      line('got', 'Received', '− ' + inr(num(bill.p)));
+      line('due', 'Balance due', inr(Math.max(0, num(bill.t) - num(bill.p))));
+    }
+    $('billCard').hidden = false;
+  }
 
   $('shop').textContent = pn || pa;
   $('amt').textContent = am ? inr(am) : 'Any amount';
