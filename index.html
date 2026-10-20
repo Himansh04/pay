@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>IN SYNC Pay</title>
+<script>
+  // The pay page moved to the IN SYNC organisation. Keep the bill's details (after ? or #).
+  location.replace('https://in-sync-studio.github.io/pay/' + location.search + location.hash);
+</script>
+</head>
+<body style="font-family:system-ui,sans-serif;padding:24px">
+<p>The pay page has moved. <a id="go" href="https://in-sync-studio.github.io/pay/">Open it here</a>.</p>
+<script>document.getElementById('go').href = 'https://in-sync-studio.github.io/pay/' + location.search + location.hash;</script>
+</body>
+</html>
